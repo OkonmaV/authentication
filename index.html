@@ -1,0 +1,21 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="referrer" content="no-referrer-when-downgrade">
+        <title>
+            wyoming
+        </title>
+    </head>
+    <body>
+        <form action="/signin" method="POST">
+            <input placeholder="login" name="login">
+            <input placeholder="password" type="password" name="pass">
+            <input type="submit" value="sign in">
+        </form>
+        <form action="/quit" method="GET">
+            <input type="submit" value="quit">
+        </form>
+        
+        <!--# include virtual="/userinfo"-->
+    </body>
+</html>
