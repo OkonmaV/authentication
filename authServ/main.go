@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -18,8 +19,15 @@ import (
 type Claims struct {
 	Login string
 	Name  string
-	IP    string
+	//	IP    string
 	jwt.StandardClaims
+}
+
+type UserInfo struct {
+	Name string `json:"name"`
+}
+type foo struct {
+	Login string `json:"login"`
 }
 
 var emailRegex = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
@@ -71,34 +79,29 @@ func (conf *configs) handler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("wrong password") //todo
 		return
 	}
-	// ------ Create request to userinfo ------
-	reqUserInfo, err := http.NewRequest("POST", "http://127.0.0.1:8081/givememycookie", strings.NewReader("")) //todo
-	if err != nil {
-		fmt.Println(err) //todo
-		return
-	}
-	// ------ Create claims for jwt ------
-	ip := r.Header.Get("X-Forwarded-For")
-	claims := &Claims{
+	//------ Get cookie from reAuth ------
+	reqReAuthBody, err := json.Marshal(&foo{
 		Login: hashLogin,
-		IP:    ip,
-	}
-	jwtReqTokenString, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(conf.jwtKey)
-	if err != nil {
-		fmt.Println(err) //todo
-		return
-	}
-	// ------ Add cookie to request and execute request ------
-	reqUserInfo.Header.Set("Cookie", "name=koki; count="+jwtReqTokenString)
+	})
+	reqReAuth, err := http.NewRequest("GET", "http://givememycookie", strings.NewReader(string(reqReAuthBody))) //todo
+	reqReAuth.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
-	respUserInfo, err := client.Do(reqUserInfo) // Close()?
+	respReAuth, err := client.Do(reqReAuth) // Close()?
 	if err != nil {
 		fmt.Println(err) //todo
 		return
 	}
-	// ------ Get cookie with userinfo and send it to user ------
-	respCookies := respUserInfo.Cookies()
+	defer func() {
+		err := respReAuth.Body.Close()
+
+		if err != nil {
+			fmt.Println(err) //todo
+			return
+		}
+	}()
+	//------ Get and set cookie ------
+	respCookies := respReAuth.Cookies()
 	if err != nil {
 		fmt.Println(err) //todo
 		return
