@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -28,30 +27,32 @@ var jwtKey = "secure_key"
 
 func handler(w http.ResponseWriter, r *http.Request) {
 
-	bar := &foo{}
-
-	if r.Body == nil {
-		fmt.Println("Empty Body") //todo
-		return
-	}
-	err := json.NewDecoder(r.Body).Decode(bar)
+	hashLogin := r.URL.Query().Get("l")
+	claims := &Claims{Login: hashLogin}
+	jwtTokenString, err := claims.GetJWT([]byte(jwtKey))
 	if err != nil {
 		fmt.Println(err) //todo
 		return
 	}
-	reqUserInfoBody, err := json.Marshal(bar)
-	reqUserInfo, err := http.NewRequest("GET", "http://givememycookie", strings.NewReader(string(reqUserInfoBody))) //todo
-	reqUserInfo.Header.Set("Content-Type", "application/json")
+
+	reqUserInfo, err := http.NewRequest("GET", "http://givememyinfo?p=[name]", nil) //todo
+	if err != nil {
+		fmt.Println(err) //todo
+		return
+	}
+	reqUserInfo.AddCookie(&http.Cookie{
+		Name:  "koki",
+		Value: jwtTokenString,
+	})
 
 	client := &http.Client{}
-	respUserInfo, err := client.Get("http://givemeinfo") //todo
+	respUserInfo, err := client.Do(reqUserInfo)
 	if err != nil {
 		fmt.Println(err) //todo
 		return
 	}
 	defer func() {
 		err := respUserInfo.Body.Close()
-
 		if err != nil {
 			fmt.Println(err) //todo
 			return
@@ -63,14 +64,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		userinfo := &UserInfo{}
 		expTime := time.Now().Add(10 * time.Hour)
 
-		err := json.NewDecoder(r.Body).Decode(userinfo)
+		err := json.NewDecoder(respUserInfo.Body).Decode(userinfo)
 		if err != nil {
 			fmt.Println(err) //todo
 			return
 		}
 
 		claims := &Claims{
-			Login: bar.Login,
+			Login: hashLogin,
 			Name:  userinfo.Name,
 		}
 
@@ -93,4 +94,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	http.HandleFunc("/", handler)
 	log.Fatal(http.ListenAndServe(":8084", nil))
+}
+
+func (claims *Claims) GetJWT(key []byte) (string, error) {
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(key)
 }

@@ -3,22 +3,25 @@ package main
 import (
 	"context"
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/dgrijalva/jwt-go"
-	"github.com/go-redis/redis"
+	"github.com/tarantool/go-tarantool"
 )
 
 type Claims struct {
 	Login string
 	Name  string
+	//Surname string
+	//Avatar string
 	//	IP    string
 	jwt.StandardClaims
 }
@@ -29,79 +32,86 @@ type UserInfo struct {
 type foo struct {
 	Login string `json:"login"`
 }
+type Tuple struct {
+	Login string
+	Pass  string
+}
 
 var emailRegex = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 var ctx = context.Background()
 
 type configs struct {
-	jwtKey      []byte
-	redisClient *redis.Client
+	jwtKey        []byte
+	tarantoolConn *tarantool.Connection
 }
 
-func (conf *configs) handler(w http.ResponseWriter, r *http.Request) {
+func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 
 	err := r.ParseForm()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println(err) //todo
 		return
 	}
+
 	// ------ Read & check recieved login ------
+
 	login := r.Form["login"]
 	if !IsEmailValid(login[0]) {
 		fmt.Println(login[0] + "oopsie email") //todo
 		return
 	}
 
-	hashLogin, err := GetMD5hash(login[0])
+	hashLogin, err := GetMD5(login[0])
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	// ------ Get password from redis ------
-	hashRedisValue, err := conf.redisClient.Get(ctx, hashLogin).Result()
-	if err != nil {
-		fmt.Println(err) //todo
+
+	// ------ Get password from tarantool ------
+	var tarantoolResTuples []Tuple
+	err = cfg.tarantoolConn.SelectTyped("main", "primary", 0, 1, tarantool.IterEq, []interface{}{hashLogin}, &tarantoolResTuples)
+	if err != nil || len(tarantoolResTuples) == 0 {
+		fmt.Println(err) //todo wrong login
 		return
 	}
+
 	// ------ Read & check recieved password ------
+
 	pass := r.Form["pass"]
 	if len(pass[0]) < 8 {
 		fmt.Println("short password") //todo
 		return
 	}
 
-	hashPass, err := GetMD5hash(pass[0])
+	hashPass, err := GetMD5(pass[0])
 	if err != nil {
 		fmt.Println(err) //todo
 		return
 	}
-	if hashPass != hashRedisValue {
+	if hashPass != tarantoolResTuples[0].Pass {
 		fmt.Println("wrong password") //todo
 		return
 	}
-	//------ Get cookie from reAuth ------
-	reqReAuthBody, err := json.Marshal(&foo{
-		Login: hashLogin,
-	})
-	reqReAuth, err := http.NewRequest("GET", "http://givememycookie", strings.NewReader(string(reqReAuthBody))) //todo
-	reqReAuth.Header.Set("Content-Type", "application/json")
+
+	//------ Get cookie from cookieGenerator ------
 
 	client := &http.Client{}
-	respReAuth, err := client.Do(reqReAuth) // Close()?
+	respCookieGen, err := client.Get("http://givememycookie?l=" + hashLogin) // Close()?
 	if err != nil {
 		fmt.Println(err) //todo
 		return
 	}
 	defer func() {
-		err := respReAuth.Body.Close()
-
+		err := respCookieGen.Body.Close()
 		if err != nil {
 			fmt.Println(err) //todo
 			return
 		}
 	}()
+
 	//------ Get and set cookie ------
-	respCookies := respReAuth.Cookies()
+
+	respCookies := respCookieGen.Cookies()
 	if err != nil {
 		fmt.Println(err) //todo
 		return
@@ -109,21 +119,42 @@ func (conf *configs) handler(w http.ResponseWriter, r *http.Request) {
 
 	http.SetCookie(w, respCookies[0])
 
-	http.Redirect(w, r, r.Header.Get("Referer"), 302)
+	http.Redirect(w, r, r.Header.Get("Referer"), 302) //todo
 }
+
+//
+//
+//
 
 func main() {
 	var jwtkey = []byte("secure_key")
-	redisClient := redis.NewClient((&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
-	}))
-	rds := &configs{jwtKey: jwtkey, redisClient: redisClient}
+	conn, err := tarantool.Connect("127.0.0.1:3301", tarantool.Opts{
+		User:          "admin",
+		Pass:          "password",
+		Timeout:       500 * time.Millisecond,
+		Reconnect:     1 * time.Second,
+		MaxReconnects: 4,
+	})
+	if err != nil {
+		fmt.Println(err) //todo
+		return
+	}
+	defer func() {
+		err := conn.Close()
+		if err != nil {
+			fmt.Println(err) //todo
+			return
+		}
+	}()
+	cfg := *&configs{jwtKey: jwtkey, tarantoolConn: conn}
 
-	http.HandleFunc("/", rds.handler)
+	http.HandleFunc("/", cfg.handler)
 	log.Fatal(http.ListenAndServe(":8082", nil))
 }
+
+//
+//
+//
 
 func IsEmailValid(email string) bool {
 	if len(email) < 6 && len(email) > 30 {
@@ -140,11 +171,22 @@ func IsEmailValid(email string) bool {
 	return true
 }
 
-func GetMD5hash(str string) (string, error) {
+func GetMD5(str string) (string, error) {
 	hash := md5.New()
 	_, err := hash.Write([]byte(str))
 	if err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+func (claims *Claims) GetJWT(key []byte) (string, error) {
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(key)
+}
+
+func EncodeBase64(data string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(data))
+}
+
+func DecodeBase64(data string) ([]byte, error) {
+	return base64.RawStdEncoding.DecodeString(data)
 }
