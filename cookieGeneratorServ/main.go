@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/json"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"net/http"
@@ -17,25 +17,26 @@ type UserInfo struct {
 	Name string `json:"name"`
 }
 type Claims struct {
-	Login string
-	Name  string
+	Login  string
+	Avatar string
 	//	IP    string
 	jwt.StandardClaims
 }
+type configs struct {
+	jwtKey []byte
+}
 
-var jwtKey = "secure_key"
-
-func handler(w http.ResponseWriter, r *http.Request) {
+func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 
 	hashLogin := r.URL.Query().Get("l")
-	claims := &Claims{Login: hashLogin}
-	jwtTokenString, err := claims.GetJWT([]byte(jwtKey))
+	claims := &Claims{Login: hashLogin, Avatar: EncodeBase64(hashLogin)}
+	jwtTokenString, err := claims.GetJWT(cfg.jwtKey)
 	if err != nil {
 		fmt.Println(err) //todo
 		return
 	}
 
-	reqUserInfo, err := http.NewRequest("GET", "http://givememyinfo?p=[name]", nil) //todo
+	/*reqUserInfo, err := http.NewRequest("GET", "http://givememyinfo?p=[name]", nil) //todo
 	if err != nil {
 		fmt.Println(err) //todo
 		return
@@ -51,51 +52,37 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err) //todo
 		return
 	}
-	defer func() {
-		err := respUserInfo.Body.Close()
-		if err != nil {
-			fmt.Println(err) //todo
-			return
-		}
-	}()
-
-	if respUserInfo.StatusCode == http.StatusOK {
-
-		userinfo := &UserInfo{}
-		expTime := time.Now().Add(10 * time.Hour)
-
-		err := json.NewDecoder(respUserInfo.Body).Decode(userinfo)
-		if err != nil {
-			fmt.Println(err) //todo
-			return
-		}
-
-		claims := &Claims{
-			Login: hashLogin,
-			Name:  userinfo.Name,
-		}
-
-		jwtTokenString, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(jwtKey)
-		if err != nil {
-			fmt.Println(err) //todo
-			return
-		}
-
-		http.SetCookie(w, &http.Cookie{
-			Name:    "koki",
-			Value:   jwtTokenString,
-			Expires: expTime,
-		})
+	userinfo := &UserInfo{}
+	err := json.NewDecoder(respUserInfo.Body).Decode(userinfo)
+	if err != nil {
+		fmt.Println(err) //todo
 		return
 	}
-	//todo: bad status code in respUserInfo
+	*/
+	expTime := time.Now().Add(10 * time.Hour)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:    "koki",
+		Value:   jwtTokenString,
+		Expires: expTime,
+	})
+	w.WriteHeader(http.StatusOK)
 }
 
 func main() {
-	http.HandleFunc("/", handler)
+	cfg := &configs{jwtKey: []byte("secure_key")}
+	http.HandleFunc("/", cfg.handler)
 	log.Fatal(http.ListenAndServe(":8084", nil))
 }
 
 func (claims *Claims) GetJWT(key []byte) (string, error) {
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(key)
+}
+
+func EncodeBase64(data string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(data))
+}
+
+func DecodeBase64(data string) ([]byte, error) {
+	return base64.RawStdEncoding.DecodeString(data)
 }

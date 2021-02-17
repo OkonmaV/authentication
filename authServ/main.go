@@ -55,13 +55,13 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 
 	// ------ Read & check recieved login ------
 
-	login := r.Form["login"]
-	if !IsEmailValid(login[0]) {
-		fmt.Println(login[0] + "oopsie email") //todo
+	login := r.FormValue("login")
+	if !IsEmailValid(login) {
+		fmt.Println(login + "oopsie email") //todo
 		return
 	}
 
-	hashLogin, err := GetMD5(login[0])
+	hashLogin, err := GetMD5(login)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -77,13 +77,13 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 
 	// ------ Read & check recieved password ------
 
-	pass := r.Form["pass"]
-	if len(pass[0]) < 8 {
+	pass := r.FormValue("pass")
+	if len(pass) < 8 {
 		fmt.Println("short password") //todo
 		return
 	}
 
-	hashPass, err := GetMD5(pass[0])
+	hashPass, err := GetMD5(pass)
 	if err != nil {
 		fmt.Println(err) //todo
 		return
@@ -101,13 +101,11 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err) //todo
 		return
 	}
-	defer func() {
-		err := respCookieGen.Body.Close()
-		if err != nil {
-			fmt.Println(err) //todo
-			return
-		}
-	}()
+
+	if respCookieGen.StatusCode != http.StatusOK {
+		fmt.Println("bad rest from cookieGen") //todo
+		return
+	}
 
 	//------ Get and set cookie ------
 
@@ -121,10 +119,6 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 
 	http.Redirect(w, r, r.Header.Get("Referer"), 302) //todo
 }
-
-//
-//
-//
 
 func main() {
 	var jwtkey = []byte("secure_key")
@@ -151,10 +145,6 @@ func main() {
 	http.HandleFunc("/", cfg.handler)
 	log.Fatal(http.ListenAndServe(":8082", nil))
 }
-
-//
-//
-//
 
 func IsEmailValid(email string) bool {
 	if len(email) < 6 && len(email) > 30 {
