@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/beevik/guid"
@@ -19,10 +20,19 @@ type Tuple struct {
 	Guid  string
 }
 
+const form = `
+        <form action="/registry" method="POST">
+			<input type="hidden" name="guid" value="%%">
+            <input placeholder="name" name="name">
+            <input placeholder="surname" name="surname">
+            <input placeholder="password" type="password" name="password">
+            <input type="submit" value="registry">
+        </form>
+`
+
 func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 
 	uid := r.URL.Query().Get("g")
-	mail := r.URL.Query().Get("m")
 
 	if !guid.IsGuid(uid) {
 		fmt.Println("broken guid") //todo
@@ -30,23 +40,27 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var tarantoolResTuples []Tuple
-	err := cfg.tarantoolConn.SelectTyped("limbo", "primary", 0, 1, tarantool.IterEq, []interface{}{mail}, &tarantoolResTuples)
+	err := cfg.tarantoolConn.SelectTyped("limbo", "secondary", 0, 1, tarantool.IterEq, []interface{}{uid}, &tarantoolResTuples)
 	if err != nil {
 		fmt.Println(err) //todo
+		return
+	}
+	if len(tarantoolResTuples) == 0 {
+		fmt.Println("not found") //todo
 		return
 	}
 	if uid != tarantoolResTuples[0].Guid {
 		fmt.Println("wrong guid") //todo
 		return
 	}
-	r.Header.Add("X-Foo", EncodeBase64(mail))
-	http.ServeFile(w, r, "form_registration.html")
+	fmt.Println(EncodeBase64(tarantoolResTuples[0].Login))
+	w.Write([]byte(strings.ReplaceAll(form, "%%", tarantoolResTuples[0].Guid)))
 }
 
 func main() {
-	connTrntl, err := tarantool.Connect("127.0.0.1:3301", tarantool.Opts{
-		User:          "admin",
-		Pass:          "password",
+	connTrntl, err := tarantool.Connect("localhost:3301", tarantool.Opts{
+		// User:          "admin",
+		// Pass:          "password",
 		Timeout:       500 * time.Millisecond,
 		Reconnect:     1 * time.Second,
 		MaxReconnects: 4,

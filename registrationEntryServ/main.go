@@ -64,15 +64,15 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	connTrntl, err := tarantool.Connect("127.0.0.1:3301", tarantool.Opts{
-		User:          "admin",
-		Pass:          "password",
+	connTrntl, err := tarantool.Connect("localhost:3301", tarantool.Opts{
+		// User:          "admin",
+		// Pass:          "password",
 		Timeout:       500 * time.Millisecond,
 		Reconnect:     1 * time.Second,
 		MaxReconnects: 4,
 	})
 	if err != nil {
-		fmt.Println(err) //todo
+		fmt.Println("tarantool", err) //todo
 		return
 	}
 	defer func() {

@@ -6,10 +6,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/tarantool/go-tarantool"
@@ -45,11 +43,10 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	mailUid := r.FormValue("guid")
 	userName := r.FormValue("name")
-	userNameLen := len(userName)
 	userSurname := r.FormValue("surname")
-	userSurnameLen := len(userSurname)
-	if userNameLen < 2 || userSurnameLen < 2 || userNameLen > 30 || userSurnameLen > 30 {
+	if len(userName) < 2 || len(userSurname) < 2 || len(userName) > 30 || len(userSurname) > 30 {
 		fmt.Println("check naming") //todo
 		return
 	}
@@ -61,11 +58,8 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//TODO get from limbo
 	userMail := w.Header().Get("X-Foo")
-	if !IsEmailValid(userMail) {
-		fmt.Println("broken mail") //todo
-		return
-	}
 	userMailHash, err := GetMD5(userMail)
 	if err != nil {
 		fmt.Println(err) //todo
@@ -94,7 +88,7 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 	// TODO: SEND CONGRATS TO EMAIL HERE
 
 	client := &http.Client{}
-	respCookieGen, err := client.Get("http://givememycookie?l=" + userMailHash)
+	respCookieGen, err := client.Get("http://127.0.0.1:8089?l=" + userMailHash)
 	if err != nil {
 		fmt.Println(err) //todo
 		return
@@ -114,9 +108,9 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	connTrntl, err := tarantool.Connect("127.0.0.1:3301", tarantool.Opts{
-		User:          "admin",
-		Pass:          "password",
+	connTrntl, err := tarantool.Connect("localhost:3301", tarantool.Opts{
+		// User:          "admin",
+		// Pass:          "password",
 		Timeout:       500 * time.Millisecond,
 		Reconnect:     1 * time.Second,
 		MaxReconnects: 4,
@@ -151,20 +145,6 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8085", nil))
 }
 
-func IsEmailValid(email string) bool {
-	if len(email) < 6 && len(email) > 30 {
-		return false
-	}
-	if !emailRegex.MatchString(email) {
-		return false
-	}
-	parts := strings.Split(email, "@")
-	mx, err := net.LookupMX(parts[1])
-	if err != nil || len(mx) == 0 {
-		return false
-	}
-	return true
-}
 func GetMD5(str string) (string, error) {
 	hash := md5.New()
 	_, err := hash.Write([]byte(str))
