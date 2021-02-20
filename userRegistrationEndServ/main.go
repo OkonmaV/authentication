@@ -46,8 +46,6 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 	userGuid := r.FormValue("guid")
 	userName := r.FormValue("name")
 	userSurname := r.FormValue("surname")
-	fmt.Println(userName)
-	fmt.Println(userSurname)
 	if len(userName) < 2 || len(userSurname) < 2 || len(userName) > 30 || len(userSurname) > 30 {
 		fmt.Println(userName)
 		fmt.Println(len(userName))
@@ -62,11 +60,7 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userPass := r.FormValue("password")
-	fmt.Println(userPass)
-	fmt.Println(len(userPass))
-
-	userPassLen := len(userPass)
-	if userPassLen < 5 {
+	if len(userPass) < 5 {
 		fmt.Println("check pass") //todo
 		return
 	}
@@ -75,6 +69,11 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 	err = cfg.tarantoolConn.SelectTyped("limbo", "secondary", 0, 1, tarantool.IterEq, []interface{}{userGuid}, &tarantoolResTuples)
 	if err != nil {
 		fmt.Println(err) //todo
+		return
+	}
+	if cap(tarantoolResTuples) == 0 {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Println("nothing in trntl with this guid") //todo
 		return
 	}
 	userMailHash, err := GetMD5(tarantoolResTuples[0].Login)
@@ -96,17 +95,19 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err) //todo
 		return
 	}
+	fmt.Println("WRITED TO MNG")
 	fmt.Println("WRITING TO TRNTL")
 	_, err = cfg.tarantoolConn.Insert("main", []interface{}{userMailHash, userPassHash})
 	if err != nil {
 		fmt.Println(err) //todo
 		return
 	}
+	fmt.Println("WRITEDTO TRNTL")
 
 	// TODO: HOW TO SEND CONGRATS FROM THIS POINT
 
 	client := &http.Client{}
-	respCookieGen, err := client.Get("http://127.0.0.1:8089?l=" + userMailHash)
+	respCookieGen, err := client.Get("/cookie/l=" + userMailHash)
 	if err != nil {
 		fmt.Println(err) //todo
 		return

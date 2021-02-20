@@ -34,18 +34,18 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 
 	if !guid.IsGuid(uid) {
 		fmt.Println("broken guid") //todo
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
 	var tarantoolResTuples []Tuple
 	err := cfg.tarantoolConn.SelectTyped("limbo", "secondary", 0, 1, tarantool.IterEq, []interface{}{uid}, &tarantoolResTuples)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
+		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Println(err) //todo
 		return
 	}
-	if len(tarantoolResTuples) == 0 {
+	if cap(tarantoolResTuples) == 0 {
 		w.WriteHeader(http.StatusUnauthorized)
 		fmt.Println("not found") //todo
 		return

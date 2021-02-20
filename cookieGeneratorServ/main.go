@@ -34,6 +34,7 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 
 	jwtTokenString, err := claims.GetJWT(cfg.jwtKey)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Println(err) //todo
 		return
 	}
