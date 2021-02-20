@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"fmt"
 	"log"
 	"net/http"
@@ -20,14 +19,13 @@ type Tuple struct {
 	Guid  string
 }
 
-const form = `
-        <form action="/registry" method="POST">
-			<input type="hidden" name="guid" value="%%">
-            <input placeholder="name" name="name">
-            <input placeholder="surname" name="surname">
-            <input placeholder="password" type="password" name="password">
-            <input type="submit" value="registry">
-        </form>
+const form = `<form action="http://localhost:8088" method="POST">
+	<input type="hidden" name="guid" value="%some%">
+	<input placeholder="name" name="name">
+	<input placeholder="surname" name="surname">
+	<input placeholder="password" type="password" name="password">
+	<input type="submit" value="registry">
+</form>
 `
 
 func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
@@ -36,25 +34,26 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 
 	if !guid.IsGuid(uid) {
 		fmt.Println("broken guid") //todo
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	var tarantoolResTuples []Tuple
 	err := cfg.tarantoolConn.SelectTyped("limbo", "secondary", 0, 1, tarantool.IterEq, []interface{}{uid}, &tarantoolResTuples)
 	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
 		fmt.Println(err) //todo
 		return
 	}
 	if len(tarantoolResTuples) == 0 {
+		w.WriteHeader(http.StatusUnauthorized)
 		fmt.Println("not found") //todo
 		return
 	}
-	if uid != tarantoolResTuples[0].Guid {
-		fmt.Println("wrong guid") //todo
-		return
+	_, err = w.Write([]byte(strings.ReplaceAll(form, "%some%", tarantoolResTuples[0].Guid)))
+	if err != nil {
+
 	}
-	fmt.Println(EncodeBase64(tarantoolResTuples[0].Login))
-	w.Write([]byte(strings.ReplaceAll(form, "%%", tarantoolResTuples[0].Guid)))
 }
 
 func main() {
@@ -80,12 +79,4 @@ func main() {
 
 	http.HandleFunc("/", cfg.handler)
 	log.Fatal(http.ListenAndServe(":8087", nil))
-}
-
-func EncodeBase64(data string) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(data))
-}
-
-func DecodeBase64(data string) ([]byte, error) {
-	return base64.RawStdEncoding.DecodeString(data)
 }

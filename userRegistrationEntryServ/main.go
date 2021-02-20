@@ -36,6 +36,7 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mail := r.FormValue("mail")
+	fmt.Println(mail)
 	if !IsEmailValid(mail) {
 		fmt.Println("mail broken") //todo
 		return
@@ -59,8 +60,8 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err) //todo
 		return
 	}
-
-	//SEND MAIL WITH GUID
+	fmt.Println(uid)
+	//w.WriteHeader(http.StatusOK)
 }
 
 func main() {

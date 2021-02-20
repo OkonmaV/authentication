@@ -7,10 +7,16 @@
         </title>
     </head>
     <body>
-        <form action="/signin" method="POST">
-            <input placeholder="login" name="login">
-            <input placeholder="password" type="password" name="pass">
-            <input type="submit" value="sign in">
+        <form action="http://localhost:8088" method="POST">
+            <input type="hidden" name="guid" value="b2dba501-5f3e-4c02-a66a-330983e2ba9e">
+            <input placeholder="name" name="name">
+            <input placeholder="surname" name="surname">
+            <input placeholder="password" type="password" name="password">
+            <input type="submit" value="registry">
+        </form>
+        <form action="http://localhost:8086/" method="POST">
+            <input placeholder="mail" name="mail">
+            <input type="submit" value="go">
         </form>
         <form action="/quit" method="GET">
             <input type="submit" value="quit">

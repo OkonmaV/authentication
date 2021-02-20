@@ -26,7 +26,7 @@ var emailRegex = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z
 
 type Tuple struct {
 	Login string
-	Check bool
+	Guid  string
 }
 
 type UserInfo struct {
@@ -43,28 +43,46 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mailUid := r.FormValue("guid")
+	userGuid := r.FormValue("guid")
 	userName := r.FormValue("name")
 	userSurname := r.FormValue("surname")
+	fmt.Println(userName)
+	fmt.Println(userSurname)
 	if len(userName) < 2 || len(userSurname) < 2 || len(userName) > 30 || len(userSurname) > 30 {
+		fmt.Println(userName)
+		fmt.Println(len(userName))
+		fmt.Println(len(userName) < 2)
+		fmt.Println(userSurname)
+		fmt.Println(len(userSurname))
+		fmt.Println(len(userSurname) < 2)
+		fmt.Println(len(userName) > 30)
+		fmt.Println(len(userSurname) > 30)
 		fmt.Println("check naming") //todo
 		return
 	}
 
 	userPass := r.FormValue("password")
+	fmt.Println(userPass)
+	fmt.Println(len(userPass))
+
 	userPassLen := len(userPass)
 	if userPassLen < 5 {
 		fmt.Println("check pass") //todo
 		return
 	}
 
-	//TODO get from limbo
-	userMail := w.Header().Get("X-Foo")
-	userMailHash, err := GetMD5(userMail)
+	var tarantoolResTuples []Tuple
+	err = cfg.tarantoolConn.SelectTyped("limbo", "secondary", 0, 1, tarantool.IterEq, []interface{}{userGuid}, &tarantoolResTuples)
 	if err != nil {
 		fmt.Println(err) //todo
 		return
 	}
+	userMailHash, err := GetMD5(tarantoolResTuples[0].Login)
+	if err != nil {
+		fmt.Println(err) //todo
+		return
+	}
+
 	userPassHash, err := GetMD5(userPass)
 	if err != nil {
 		fmt.Println(err) //todo
@@ -72,20 +90,20 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userInfo := &UserInfo{Login: userMailHash, Name: userName, Surname: userSurname}
-
+	fmt.Println("WRITING TO MNG")
 	_, err = cfg.mongoColl.InsertOne(ctx, userInfo)
 	if err != nil {
 		fmt.Println(err) //todo
 		return
 	}
-
+	fmt.Println("WRITING TO TRNTL")
 	_, err = cfg.tarantoolConn.Insert("main", []interface{}{userMailHash, userPassHash})
 	if err != nil {
 		fmt.Println(err) //todo
 		return
 	}
 
-	// TODO: SEND CONGRATS TO EMAIL HERE
+	// TODO: HOW TO SEND CONGRATS FROM THIS POINT
 
 	client := &http.Client{}
 	respCookieGen, err := client.Get("http://127.0.0.1:8089?l=" + userMailHash)
@@ -142,7 +160,7 @@ func main() {
 	cfg := *&configs{tarantoolConn: connTrntl, mongoConn: connMng, mongoColl: collectionMng}
 
 	http.HandleFunc("/", cfg.handler)
-	log.Fatal(http.ListenAndServe(":8085", nil))
+	log.Fatal(http.ListenAndServe(":8088", nil))
 }
 
 func GetMD5(str string) (string, error) {

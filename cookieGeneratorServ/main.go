@@ -29,7 +29,9 @@ type configs struct {
 func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 
 	hashLogin := r.URL.Query().Get("l")
+
 	claims := &Claims{Login: hashLogin, Avatar: EncodeBase64(hashLogin)}
+
 	jwtTokenString, err := claims.GetJWT(cfg.jwtKey)
 	if err != nil {
 		fmt.Println(err) //todo
@@ -59,6 +61,7 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	*/
+
 	expTime := time.Now().Add(10 * time.Hour)
 
 	http.SetCookie(w, &http.Cookie{
