@@ -71,7 +71,7 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err) //todo
 		return
 	}
-	if cap(tarantoolResTuples) == 0 {
+	if len(tarantoolResTuples) == 0 {
 		w.WriteHeader(http.StatusUnauthorized)
 		fmt.Println("nothing in trntl with this guid") //todo
 		return
@@ -107,7 +107,7 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 	// TODO: HOW TO SEND CONGRATS FROM THIS POINT
 
 	client := &http.Client{}
-	respCookieGen, err := client.Get("/cookie/l=" + userMailHash)
+	respCookieGen, err := client.Get("http://127.0.0.1:8084/?l=" + userMailHash)
 	if err != nil {
 		fmt.Println(err) //todo
 		return

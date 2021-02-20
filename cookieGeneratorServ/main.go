@@ -17,8 +17,8 @@ type UserInfo struct {
 	Name string `json:"name"`
 }
 type Claims struct {
-	Login  string
-	Avatar string
+	Login  string `json:"login"`
+	Avatar string `json:"avatar"`
 	//	IP    string
 	jwt.StandardClaims
 }
@@ -31,6 +31,7 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 	hashLogin := r.URL.Query().Get("l")
 
 	claims := &Claims{Login: hashLogin, Avatar: EncodeBase64(hashLogin)}
+	fmt.Println(claims, hashLogin)
 
 	jwtTokenString, err := claims.GetJWT(cfg.jwtKey)
 	if err != nil {
@@ -75,6 +76,10 @@ func (cfg *configs) handler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	cfg := &configs{jwtKey: []byte("secure_key")}
+	a, err := jwt.Parse("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsb2dpbiI6IjE3MjYyN2Y2M2NhNzU3NzI5OTYyZDBkNTkwMGI1YjBlIiwiYXZhdGFyIjoiTVRjeU5qSTNaall6WTJFM05UYzNNams1TmpKa01HUTFPVEF3WWpWaU1HVSJ9.pv1uGsO0Y0Hd5M6wl-EB0EwqvTpeuEaj7-mhCPcODPk", func(token *jwt.Token) (interface{}, error) {
+		return cfg.jwtKey, nil
+	})
+	fmt.Println(a.Claims.(jwt.MapClaims), err)
 	http.HandleFunc("/", cfg.handler)
 	log.Fatal(http.ListenAndServe(":8084", nil))
 }
